@@ -29,6 +29,7 @@ interface IToken {
 
 // UniswapV2 router interface
 interface IUniswapV2Router {
+    /// @dev Swap exact tokens A for tokens B.
     function swapExactTokensForTokens(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -37,6 +38,7 @@ interface IUniswapV2Router {
         uint256 deadline
     ) external returns (uint256[] memory amounts);
 
+    /// @dev Add liquidity to the pool.
     function addLiquidity(
         address tokenA,
         address tokenB,
@@ -79,6 +81,7 @@ error ZeroValue();
 
 /// @title 1cb - Smart contract for one click bonding
 /// @author Aleksandr Kuperman - <aleksandr.kuperman@valory.xyz>
+/// @author Andrey Lebedev - <andrey.lebedev@valory.xyz>
 contract OneClickBond {
     event OwnerUpdated(address indexed owner);
     event Deposit(address indexed owner, uint256 olasAmount, uint256 wethAmount, uint256 liquidity, uint256 wethLeft);
@@ -174,6 +177,7 @@ contract OneClickBond {
             address(this),
             block.timestamp + 1000
         );
+
 
         if (liquidity == 0) {
             revert ZeroValue();
