@@ -27,6 +27,10 @@ interface IToken {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
+interface IWETH {
+    function deposit(uint256 amount) external;
+}
+
 // UniswapV2 router interface
 interface IUniswapV2Router {
     /// @dev Swap exact tokens A for tokens B.
@@ -125,23 +129,108 @@ contract OneClickBond {
         emit OwnerUpdated(newOwner);
     }
 
-    /// @dev Deposit OLAS to create OLAS-WETH LP and bond.
-    /// @param amount OLAS amount.
+    /// @dev Deposit ETH and/or WETH to create OLAS-WETH LP and bond.
+    /// @param amount WETH amount.
     /// @param productId Bonding product Id.
-    function deposit(uint256 amount, uint256 productId) external {
+    function depositETH(uint256 amount, uint256 productId) external payable {
         // Check for the contract ownership
         if (msg.sender != owner) {
             revert OwnerOnly(msg.sender, owner);
         }
 
         // Check for the amount value
-        if (amount < 2) {
+        if (amount == 0 && msg.value == 0) {
+            revert ZeroValue();
+        }
+
+        // Check if ETH to WETH is needed
+        if (msg.value > 0) {
+            IWETH(WETH).deposit(msg.value);
+        }
+
+        // Transfer tokens from the owner to this contract
+        if (amount > 0) {
+            IToken(WETH).transferFrom(msg.sender, address(this), amount);
+        }
+
+        // Combine ETH and WETH amounts
+        amount += msg.value;
+
+        // Get the WETH amount that is a half of the overall amount
+        uint256 wethAmount = amount / 2;
+        // Approve OLAS for the router
+        IToken(WETH).approve(ROUTER, amount);
+
+        // Get the token path
+        address[] memory path = new address[](2);
+        path[0] = WETH;
+        path[1] = OLAS;
+
+        // Swap WETH to OLAS
+        uint256[] memory swapAmounts = IUniswapV2Router(ROUTER).swapExactTokensForTokens(
+            wethAmount,
+            1,
+            path,
+            address(this),
+            block.timestamp + 1000
+        );
+
+        // Get the amount of OLAS received
+        uint256 olasAmount = swapAmounts[1];
+
+        // Approve OLAS to the router
+        IToken(OLAS).approve(ROUTER, olasAmount);
+
+        // Add liquidity
+        (uint256 olasAmountLP, uint256 wethAmountLP, uint256 liquidity) = IUniswapV2Router(ROUTER).addLiquidity(
+            OLAS,
+            WETH,
+            olasAmount,
+            wethAmount,
+            1,
+            1,
+            address(this),
+            block.timestamp + 1000
+        );
+
+        // Check the liquidity amount
+        if (liquidity == 0) {
+            revert ZeroValue();
+        }
+
+        // Approve LP tokens for treasury
+        IToken(PAIR).approve(TREASURY, liquidity);
+
+        // Deposit liquidity into the bonding product
+        IDepository(DEPOSITORY).deposit(productId, liquidity);
+
+        // Transfer WETH leftovers back to the owner
+        wethAmount -= wethAmountLP;
+        if (wethAmount > 0) {
+            IToken(WETH).transfer(msg.sender, wethAmount);
+        }
+
+        emit Deposit(msg.sender, olasAmountLP, wethAmountLP, liquidity, wethAmount);
+    }
+
+    /// @dev Deposit OLAS to create OLAS-WETH LP and bond.
+    /// @param amount OLAS amount.
+    /// @param productId Bonding product Id.
+    function depositOLAS(uint256 amount, uint256 productId) external {
+        // Check for the contract ownership
+        if (msg.sender != owner) {
+            revert OwnerOnly(msg.sender, owner);
+        }
+
+        // Check for the amount value
+        if (amount == 0) {
             revert ZeroValue();
         }
 
         // Transfer tokens from the owner to this contract
         IToken(OLAS).transferFrom(msg.sender, address(this), amount);
 
+        // Get the OLAS amount that is a half of the overall amount
         uint256 olasAmount = amount / 2;
         // Approve OLAS for the router
         IToken(OLAS).approve(ROUTER, amount);
@@ -151,7 +240,7 @@ contract OneClickBond {
         path[0] = OLAS;
         path[1] = WETH;
 
-        // Swap WETH to another token
+        // Swap OLAS to WETH
         uint256[] memory swapAmounts = IUniswapV2Router(ROUTER).swapExactTokensForTokens(
             olasAmount,
             1,
