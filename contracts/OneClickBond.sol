@@ -55,6 +55,11 @@ interface IUniswapV2Router {
     ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
 }
 
+interface IPair {
+    // Gets pair reserves
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 tsLast);
+}
+
 // Depository interface
 interface IDepository {
     /// @dev Deposits tokens in exchange for a bond from a specified product.
@@ -106,6 +111,10 @@ contract OneClickBond {
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     // LP token address
     address public constant PAIR = 0x09D1d767eDF8Fa23A64C51fa559E0688E526812F;
+    // Reserves limit for a swap (% * 100)
+    uint256 public constant SWAP_LIMIT = 200;
+    // Reserves limit denominator
+    uint256 public constant SWAP_DENOMINATOR = 10000;
 
     /// @dev OneClickBond constructor.
     constructor() {
@@ -143,6 +152,14 @@ contract OneClickBond {
             revert ZeroValue();
         }
 
+        // Get LP reserves
+        (, uint112 reserve1, uint32 tsLast) = IPair(PAIR).getReserves();
+
+        // Check that the last block timestamp is not the current block timestamp
+        if (block.timestamp == tsLast) {
+            revert();
+        }
+
         // Check if ETH to WETH is needed
         if (msg.value > 0) {
             IWETH(WETH).deposit(msg.value);
@@ -158,6 +175,12 @@ contract OneClickBond {
 
         // Get the WETH amount that is a half of the overall amount
         uint256 wethAmount = amount / 2;
+
+        // Swap amount must not be bigger than 2%, otherwise it might hurt the pool price significantly
+        if (wethAmount > reserve1 * SWAP_LIMIT / SWAP_DENOMINATOR) {
+            revert();
+        }
+
         // Approve OLAS for the router
         IToken(WETH).approve(ROUTER, amount);
 
@@ -227,11 +250,25 @@ contract OneClickBond {
             revert ZeroValue();
         }
 
+        // Get LP reserves
+        (uint112 reserve0, , uint32 tsLast) = IPair(PAIR).getReserves();
+
+        // Check that the last block timestamp is not the current block timestamp
+        if (block.timestamp == tsLast) {
+            revert();
+        }
+
         // Transfer tokens from the owner to this contract
         IToken(OLAS).transferFrom(msg.sender, address(this), amount);
 
         // Get the OLAS amount that is a half of the overall amount
         uint256 olasAmount = amount / 2;
+
+        // Swap amount must not be bigger than 2%, otherwise it might hurt the pool price significantly
+        if (olasAmount > reserve0 * SWAP_LIMIT / SWAP_DENOMINATOR) {
+            revert();
+        }
+
         // Approve OLAS for the router
         IToken(OLAS).approve(ROUTER, amount);
 
@@ -305,5 +342,12 @@ contract OneClickBond {
         IToken(OLAS).transfer(msg.sender, olasAmount);
 
         emit Withdraw(msg.sender, olasAmount);
+    }
+
+    function getMaxSwapResevres() external view returns (uint256 olasAmount, uint256 wethAmount) {
+        // Get LP reserves
+        (uint112 reserve0, uint112 reserve1, ) = IPair(PAIR).getReserves();
+        olasAmount = 2 * reserve0 * SWAP_LIMIT / SWAP_DENOMINATOR;
+        wethAmount = 2 * reserve1 * SWAP_LIMIT / SWAP_DENOMINATOR;
     }
 }
