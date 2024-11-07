@@ -53,17 +53,23 @@ async function main() {
 
     console.log("2. EOA to deploy BalancerBond contract");
     const gasPrice = ethers.utils.parseUnits(parsedData.gasPriceInGwei, "gwei");
-    const gasLimit = 1000000;
     const BalancerBond = await ethers.getContractFactory("BalancerBond");
     console.log("You are signing the following transaction: BalancerBond.connect(EOA).deploy()");
     const balancerBond = await BalancerBond.connect(EOA).deploy(parsedData.olasAddress, parsedData.balancerVaultAddress,
-        parsedData.balancerPoolId, { gasPrice, gasLimit });
+        parsedData.balancerPoolId, { gasPrice });
     const result = await balancerBond.deployed();
 
     // Transaction details
     console.log("Contract deployment: BalancerBond");
     console.log("Contract address:", balancerBond.address);
     console.log("Transaction:", result.deployTransaction.hash);
+
+    // Wait half a minute for the transaction completion
+    await new Promise(r => setTimeout(r, 30000));
+
+    // Writing updated parameters back to the JSON file
+    parsedData.balancerBondAddress = balancerBond.address;
+    fs.writeFileSync(globalsFile, JSON.stringify(parsedData));
 
     // Contract verification
     const execSync = require("child_process").execSync;

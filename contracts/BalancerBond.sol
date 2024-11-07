@@ -23,7 +23,7 @@ interface IVault {
         bytes userData;
         bool fromInternalBalance;
     }
-    
+
     /// @dev Called by users to join a Pool, which transfers tokens from `sender` into the Pool's balance. This will
     /// trigger custom Pool behavior, which will typically grant something in return to `recipient` - often tokenized
     /// Pool shares.
