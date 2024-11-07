@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.28;
 
 interface IToken {
     /// @dev Gets the amount of tokens owned by a specified account.
