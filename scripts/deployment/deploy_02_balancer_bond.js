@@ -53,10 +53,11 @@ async function main() {
 
     console.log("2. EOA to deploy BalancerBond contract");
     const gasPrice = ethers.utils.parseUnits(parsedData.gasPriceInGwei, "gwei");
+    const gasLimit = 1000000;
     const BalancerBond = await ethers.getContractFactory("BalancerBond");
     console.log("You are signing the following transaction: BalancerBond.connect(EOA).deploy()");
     const balancerBond = await BalancerBond.connect(EOA).deploy(parsedData.olasAddress, parsedData.balancerVaultAddress,
-        parsedData.balancerPoolId, { gasPrice });
+        parsedData.balancerPoolId, { gasPrice, gasLimit });
     const result = await balancerBond.deployed();
 
     // Transaction details
